@@ -1347,8 +1347,9 @@
     updateHeaderCounts();
   }
 
+  const DEFAULT_CLIENT_ID = "729988039870-25qj122rofa3vk38m3vq760bu0pld36a.apps.googleusercontent.com";
   function getStoredClientId() {
-    return localStorage.getItem(CONFIG_KEY + "_client_id") || "";
+    return localStorage.getItem(CONFIG_KEY + "_client_id") || DEFAULT_CLIENT_ID;
   }
 
   function saveClientId() {
