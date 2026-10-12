@@ -1,0 +1,2069 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Single — Google Tasks Synced Anti-List Engine</title>
+  <!-- Google Identity Services (GIS) for direct Google Tasks API OAuth -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #131b2e;
+      --card-border: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.15);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --purple: #a855f7;
+      --google-blue: #4285f4;
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --radius-sm: 10px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Heebo", "Assistant", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font);
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    input, textarea, select {
+      user-select: auto;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
+    }
+
+    .app-frame {
+      width: 100%;
+      max-width: 440px;
+      height: 870px;
+      max-height: 95vh;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 36px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
+
+    /* Top Bar */
+    header {
+      padding: 16px 20px 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 17px;
+      color: #fff;
+    }
+
+    .brand-name {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    /* Sync Button */
+    .btn-sync {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: var(--text-muted);
+      padding: 6px 10px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-sync:hover {
+      background: #334155;
+      color: #fff;
+    }
+    .btn-sync.syncing .sync-icon {
+      animation: spin 0.8s linear infinite;
+      color: var(--accent);
+    }
+    .btn-sync.connected {
+      border-color: rgba(66, 133, 244, 0.4);
+      color: var(--accent);
+      background: rgba(66, 133, 244, 0.1);
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    .badge-streak {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: var(--success);
+      padding: 6px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .badge-streak:hover {
+      background: rgba(16, 185, 129, 0.22);
+    }
+
+    .btn-icon-header {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: var(--text-muted);
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 15px;
+      transition: all 0.2s;
+    }
+    .btn-icon-header:hover {
+      background: #334155;
+      color: #fff;
+    }
+
+    /* State / Energy Filter Bar */
+    .filter-wrapper {
+      padding: 6px 18px 10px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .filter-wrapper::-webkit-scrollbar { display: none; }
+
+    .filter-chip {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: var(--text-muted);
+      padding: 7px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-chip.active {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Main Deck Stage with Real Swipe */
+    .deck-container {
+      flex: 1;
+      padding: 4px 18px 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      touch-action: pan-y;
+      overflow: hidden;
+    }
+
+    .card-swipe-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      max-height: 480px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .task-card {
+      width: 100%;
+      height: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: absolute;
+      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+      touch-action: none;
+      cursor: grab;
+      will-change: transform;
+    }
+    .task-card:active { cursor: grabbing; }
+
+    /* Swipe Overlay Badges */
+    .swipe-badge {
+      position: absolute;
+      top: 24px;
+      padding: 6px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 20;
+      transition: opacity 0.15s ease;
+    }
+    .swipe-badge.pass {
+      right: 20px;
+      border: 2px solid #94a3b8;
+      color: #94a3b8;
+      background: rgba(30, 41, 59, 0.95);
+      transform: rotate(12deg);
+    }
+    .swipe-badge.like {
+      left: 20px;
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      background: rgba(15, 23, 42, 0.95);
+      transform: rotate(-12deg);
+    }
+
+    .card-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .card-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn-edit-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: var(--text-muted);
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .btn-edit-card:hover {
+      background: #334155;
+      color: var(--text-main);
+    }
+
+    .tag {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 8px;
+      background: #1e293b;
+      color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .tag.energy-low { background: rgba(245, 158, 11, 0.12); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.2); }
+    .tag.energy-quick { background: rgba(56, 189, 248, 0.12); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.2); }
+    .tag.energy-focus { background: rgba(168, 85, 247, 0.12); color: var(--purple); border: 1px solid rgba(168, 85, 247, 0.2); }
+
+    .task-title {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.35;
+      color: var(--text-main);
+      margin-bottom: 14px;
+    }
+
+    /* Micro-Step Callout */
+    .micro-step-box {
+      background: rgba(2, 6, 23, 0.6);
+      border: 1px dashed #334155;
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .micro-step-icon {
+      font-size: 18px;
+      line-height: 1;
+      margin-top: 2px;
+    }
+
+    .micro-step-content h4 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--accent);
+      margin-bottom: 3px;
+      font-weight: 700;
+    }
+
+    .micro-step-content p {
+      font-size: 13.5px;
+      color: #cbd5e1;
+      line-height: 1.4;
+    }
+
+    /* Breakdown Expansion */
+    .breakdown-list {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .breakdown-item {
+      background: #1e293b;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #cbd5e1;
+    }
+    .breakdown-num {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10.5px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    /* Action Controls */
+    .card-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .btn {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      border: none;
+      font-size: 14.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-secondary {
+      background: #1e293b;
+      color: var(--text-muted);
+      border: 1px solid #334155;
+    }
+    .btn-secondary:hover { background: #334155; color: var(--text-main); }
+
+    .btn-breakdown {
+      grid-column: span 2;
+      background: transparent;
+      color: var(--purple);
+      border: 1px dashed rgba(168, 85, 247, 0.4);
+      padding: 8px;
+      font-size: 12.5px;
+      border-radius: 8px;
+    }
+    .btn-breakdown:hover { background: rgba(168, 85, 247, 0.1); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      color: #0f172a;
+      font-weight: 700;
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
+    }
+
+    .swipe-hint {
+      text-align: center;
+      font-size: 11.5px;
+      color: #64748b;
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    /* Bottom Quick-Capture Bar */
+    .capture-bar {
+      padding: 14px 18px 20px;
+      background: #0b1120;
+      border-top: 1px solid #1e293b;
+    }
+
+    .capture-box {
+      display: flex;
+      align-items: center;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 4px 10px;
+      transition: border-color 0.2s;
+    }
+    .capture-box:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+    }
+
+    .capture-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-main);
+      font-size: 14px;
+      padding: 8px 4px;
+    }
+    .capture-input::placeholder { color: #64748b; }
+
+    .btn-add {
+      background: var(--accent);
+      color: #0f172a;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    /* Modals */
+    .modal-fullscreen {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #090d16;
+      z-index: 60;
+      display: none;
+      flex-direction: column;
+      animation: slideUp 0.25s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .modal-header {
+      padding: 18px 20px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .btn-close-modal {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .modal-tabs {
+      display: flex;
+      border-bottom: 1px solid #1e293b;
+      background: #0f172a;
+    }
+
+    .modal-tab {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .modal-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    .modal-content-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .list-task-item {
+      background: #131b2e;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s;
+    }
+    .list-task-item.completed-item {
+      opacity: 0.6;
+    }
+    .list-task-item.completed-item .list-task-text {
+      text-decoration: line-through;
+    }
+
+    .list-task-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .checkbox-round {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid #475569;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .checkbox-round.checked {
+      background: var(--success);
+      border-color: var(--success);
+      color: #022c22;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .list-task-text {
+      font-size: 14.5px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .list-task-sub {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-top: 3px;
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-action-icon {
+      background: transparent;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      padding: 6px;
+      font-size: 15px;
+      border-radius: 8px;
+    }
+    .btn-action-icon:hover {
+      color: var(--text-main);
+      background: #1e293b;
+    }
+    .btn-action-icon.btn-delete:hover { color: var(--danger); }
+
+    /* Sync Modal */
+    .sync-modal {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(9, 13, 22, 0.96);
+      z-index: 70;
+      display: none;
+      flex-direction: column;
+      padding: 24px 20px;
+      overflow-y: auto;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .sync-card {
+      background: #131b2e;
+      border: 1px solid #1e293b;
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .sync-card h4 {
+      font-size: 15px;
+      margin-bottom: 8px;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sync-card p {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .btn-google-auth {
+      background: #fff;
+      color: #1f2937;
+      border: 1px solid #e5e7eb;
+      font-weight: 700;
+      padding: 12px;
+      border-radius: 12px;
+      width: 100%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 14px;
+      transition: background 0.15s;
+    }
+    .btn-google-auth:hover { background: #f3f4f6; }
+
+    /* Edit Modal */
+    .edit-modal {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(9, 13, 22, 0.95);
+      z-index: 70;
+      display: none;
+      flex-direction: column;
+      padding: 24px 20px;
+      overflow-y: auto;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .edit-form-group { margin-bottom: 14px; }
+    .edit-label { display: block; font-size: 12.5px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+    .edit-input, .edit-select, .edit-textarea {
+      width: 100%;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+    .edit-input:focus, .edit-select:focus, .edit-textarea:focus { border-color: var(--accent); }
+    .edit-actions { display: flex; gap: 10px; margin-top: 16px; }
+
+    /* 2-Minute Warmup Screen */
+    .warmup-modal {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #090d16;
+      z-index: 50;
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 40px 24px;
+      animation: fadeIn 0.25s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .warmup-header { text-align: center; }
+    .warmup-rule { font-size: 12px; color: var(--accent); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
+    .warmup-task-name { font-size: 18px; font-weight: 700; color: var(--text-main); }
+    .timer-center { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .timer-circle {
+      width: 220px; height: 220px; border-radius: 50%; border: 6px solid #1e293b; border-top-color: var(--accent);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 24px;
+      position: relative; box-shadow: 0 0 40px var(--accent-glow);
+    }
+    .timer-digits { font-size: 52px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; letter-spacing: -2px; }
+    .timer-label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+    .focus-step-instruction { background: #131b2e; border: 1px solid #1e293b; border-radius: var(--radius-md); padding: 14px 18px; text-align: center; width: 100%; }
+    .focus-step-instruction span { display: block; font-size: 11.5px; color: var(--accent); font-weight: 700; margin-bottom: 4px; }
+    .focus-step-instruction p { font-size: 14.5px; font-weight: 600; color: #f1f5f9; }
+    .warmup-actions { display: flex; flex-direction: column; gap: 10px; }
+    .btn-complete { background: var(--success); color: #064e3b; padding: 15px; font-size: 15.5px; font-weight: 800; }
+    .btn-stop { background: transparent; color: var(--text-muted); font-size: 13px; }
+
+    /* Toast */
+    .toast {
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px);
+      background: #10b981; color: #022c22; padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 700;
+      z-index: 100; transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 10px 20px rgba(0,0,0,0.4); white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    .deck-empty { display: none; text-align: center; padding: 40px 20px; }
+    .deck-empty h3 { font-size: 20px; margin-bottom: 8px; }
+    .deck-empty p { font-size: 14px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<div class="app-frame">
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">כל הכבוד! 🎉</div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">S</div>
+      <div>
+        <div class="brand-name">Single</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <!-- Sync Button -->
+      <button class="btn-sync" id="btnSync" onclick="triggerSync()" title="סנכרון ענן Google Tasks">
+        <span class="sync-icon">🔄</span>
+        <span id="syncText">סנכרון</span>
+      </button>
+
+      <!-- Completed Badge (Clickable) -->
+      <div class="badge-streak" id="badgeStreak" onclick="openFullListModal('completed')">
+        <span>🔥</span>
+        <span id="completedCountText">4 בוצעו</span>
+      </div>
+
+      <!-- Settings / Sync Setup Button -->
+      <button class="btn-icon-header" onclick="openSyncModal()" title="הגדרות סנכרון">
+        ⚙️
+      </button>
+
+      <!-- Full List View Button -->
+      <button class="btn-icon-header" onclick="openFullListModal('active')" title="רשימת כל המשימות">
+        ☰
+      </button>
+    </div>
+  </header>
+
+  <!-- State / Energy Filter -->
+  <div class="filter-wrapper">
+    <button class="filter-chip active" onclick="setFilter('all')">🎲 הכל</button>
+    <button class="filter-chip" onclick="setFilter('low')">🥱 שפל צהריים</button>
+    <button class="filter-chip" onclick="setFilter('quick')">⚡ יש לי 5 דק'</button>
+    <button class="filter-chip" onclick="setFilter('focus')">🧠 פוקוס / תכנון</button>
+  </div>
+
+  <!-- Central Card Stage with Real Touch/Mouse Swipe -->
+  <div class="deck-container">
+    <div class="card-swipe-wrapper">
+      <div class="task-card" id="taskCard">
+        <!-- Swipe overlay feedback -->
+        <div class="swipe-badge pass" id="badgePass">לא עכשיו ↩️</div>
+        <div class="swipe-badge like" id="badgeLike">יאללה! ⚡</div>
+
+        <div>
+          <div class="card-header-row">
+            <div class="card-tags" id="cardTags">
+              <span class="tag energy-low">🥱 שפל צהריים</span>
+              <span class="tag">🏠 בבית</span>
+              <span class="tag">⏱️ 5 דקות</span>
+            </div>
+            <!-- Edit Button on Card -->
+            <button class="btn-edit-card" onclick="openEditModalForCurrent()" title="עריכת משימה">
+              ✏️
+            </button>
+          </div>
+          
+          <h2 class="task-title" id="taskTitle">בדיקת טרמפולינה לאיתור חור</h2>
+
+          <div class="micro-step-box">
+            <div class="micro-step-icon">🎯</div>
+            <div class="micro-step-content">
+              <h4>הצעד הראשון (רק ל-2 דקות)</h4>
+              <p id="microStepText">לצאת לחצר, לנפח מעט עם המשאבה ולראות אם שומעים שריקת אוויר ברורה.</p>
+            </div>
+          </div>
+
+          <div class="breakdown-list" id="breakdownList"></div>
+        </div>
+
+        <div>
+          <button class="btn btn-breakdown" id="btnBreakdown" onclick="toggleBreakdown()">🔨 זה גדול עליי, פרק לצעדים</button>
+          <div class="card-actions">
+            <button class="btn btn-secondary" onclick="swipeLeft()">לא עכשיו ↩️</button>
+            <button class="btn btn-primary" onclick="startWarmup()">יאללה, נתחיל! ⚡</button>
+          </div>
+          <div class="swipe-hint">
+            <span>👈 החלק שמאלה: לא עכשיו</span>
+            <span>|</span>
+            <span>👉 החלק ימינה: יאללה</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="deck-empty" id="emptyState">
+      <h3>המאגר במצב הזה נקי! 👏</h3>
+      <p>בחר מצב אנרגיה אחר או זרוק משימה חדשה למטה.</p>
+    </div>
+  </div>
+
+  <!-- Quick Capture Bar -->
+  <div class="capture-bar">
+    <form class="capture-box" onsubmit="handleCapture(event)">
+      <input type="text" id="captureInput" class="capture-input" placeholder="זרוק משימה חופשי... (ה-AI כבר יתייג ויסנכרן)" autocomplete="off">
+      <button type="submit" class="btn-add">+</button>
+    </form>
+  </div>
+
+  <!-- Full List View Modal (All Tasks & Completed) -->
+  <div class="modal-fullscreen" id="fullListModal">
+    <div class="modal-header">
+      <div class="modal-title">מאגר המשימות המלא</div>
+      <button class="btn-close-modal" onclick="closeFullListModal()">✕</button>
+    </div>
+    <div class="modal-tabs">
+      <div class="modal-tab active" id="tabActive" onclick="switchModalTab('active')">
+        משימות לעשייה (<span id="activeCount">0</span>)
+      </div>
+      <div class="modal-tab" id="tabCompleted" onclick="switchModalTab('completed')">
+        בוצעו בהצלחה (<span id="modalCompletedCount">0</span>)
+      </div>
+    </div>
+    <div class="modal-content-list" id="modalTaskList"></div>
+    <div class="capture-bar" style="background:#090d16;">
+      <form class="capture-box" onsubmit="handleModalCapture(event)">
+        <input type="text" id="modalCaptureInput" class="capture-input" placeholder="הוסף משימה לרשימה..." autocomplete="off">
+        <button type="submit" class="btn-add">+</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit Task Modal -->
+  <div class="edit-modal" id="editModal">
+    <div class="modal-header" style="border:none; padding: 0 0 16px;">
+      <div class="modal-title">עריכת משימה ותיקון קיטלוג</div>
+      <button class="btn-close-modal" onclick="closeEditModal()">✕</button>
+    </div>
+
+    <input type="hidden" id="editTaskId">
+
+    <div class="edit-form-group">
+      <label class="edit-label">שם המשימה</label>
+      <input type="text" id="editTitle" class="edit-input">
+    </div>
+
+    <div class="edit-form-group">
+      <label class="edit-label">רמת אנרגיה (קיטלוג AI)</label>
+      <select id="editEnergy" class="edit-select">
+        <option value="low">🥱 שפל צהריים (פיזי / ללא מאמץ מנטלי)</option>
+        <option value="quick">⚡ יש לי 5 דק' (הודעות / טלפון / זריז)</option>
+        <option value="focus">🧠 פוקוס / תכנון (מול לפטופ / עבודה מורכבת)</option>
+      </select>
+    </div>
+
+    <div class="edit-form-group">
+      <label class="edit-label">זמן משוער</label>
+      <select id="editTime" class="edit-select">
+        <option value="2 דקות">2 דקות</option>
+        <option value="5 דקות">5 דקות</option>
+        <option value="15 דקות">15 דקות</option>
+        <option value="30 דקות">30 דקות</option>
+        <option value="שעה+">שעה ומעלה (פרויקט)</option>
+      </select>
+    </div>
+
+    <div class="edit-form-group">
+      <label class="edit-label">סביבה / הקשר</label>
+      <select id="editContext" class="edit-select">
+        <option value="🏠 בית">🏠 בית</option>
+        <option value="📱 טלפון">📱 טלפון</option>
+        <option value="💻 מחשב">💻 מחשב</option>
+        <option value="🚆 רכבת">🚆 רכבת</option>
+        <option value="🌳 חצר">🌳 חצר</option>
+        <option value="🌿 מרפסת">🌿 מרפסת</option>
+        <option value="🛒 קניות">🛒 קניות</option>
+      </select>
+    </div>
+
+    <div class="edit-form-group">
+      <label class="edit-label">הצעד הראשון ל-2 דקות (Micro-Step)</label>
+      <textarea id="editMicroStep" class="edit-textarea" rows="2"></textarea>
+    </div>
+
+    <div class="edit-actions">
+      <button class="btn btn-secondary" style="flex:1;" onclick="closeEditModal()">ביטול</button>
+      <button class="btn btn-primary" style="flex:1;" onclick="saveTaskEdit()">שמור שינויים ✓</button>
+    </div>
+  </div>
+
+  <!-- Google Sync Setup Modal -->
+  <div class="sync-modal" id="syncModal">
+    <div class="modal-header" style="border:none; padding: 0 0 16px;">
+      <div class="modal-title">סנכרון ענן עם Google Tasks</div>
+      <button class="btn-close-modal" onclick="closeSyncModal()">✕</button>
+    </div>
+
+    <div class="sync-card">
+      <h4><span>🔗</span> חיבור ישיר לחשבון Google</h4>
+      <p>התחברות ישירה לחשבון Google שלך תסנכרן את כל המשימות, הסימונים וההוספות מול Google Tasks בנייד ובמחשב בזמן אמת.</p>
+      
+      <div id="googleAuthSection">
+        <button class="btn-google-auth" onclick="requestGoogleAuth()">
+          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+          התחבר עם Google וסנכרן
+        </button>
+      </div>
+      <div id="authStatusBadge" style="margin-top:10px; font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+        <span style="width:8px; height:8px; border-radius:50%; background:#f59e0b; display:inline-block;" id="statusDot"></span>
+        <span id="authStatusText">פועל על שמירה מקומית (LocalStorage) עם כל המשימות שלך מגוגל</span>
+      </div>
+    </div>
+
+    <div class="sync-card">
+      <h4><span>⚙️</span> הגדרת Google Client ID</h4>
+      <p style="font-size:12px; margin-bottom:8px;">להפעלת חיבור API ישיר מדפדפן עצמאי, הזן את ה-Client ID מ-Google Cloud Console (בחינם עם הרשאת Google Tasks):</p>
+      <input type="text" id="clientIdInput" class="edit-input" placeholder="xxxx.apps.googleusercontent.com" style="font-size:12px; font-family:monospace;">
+      <button class="btn btn-secondary" style="margin-top:10px; width:100%; font-size:13px;" onclick="saveClientId()">שמור מזהה Client ID</button>
+    </div>
+
+    <div class="sync-card">
+      <h4><span>💾</span> גיבוי וייצוא נתונים</h4>
+      <p>ייצוא המאגר המעודכן שלך לקובץ JSON או שיתוף בין מכשירים:</p>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-secondary" style="flex:1; font-size:13px;" onclick="exportTasksJSON()">ייצוא לקובץ JSON</button>
+        <button class="btn btn-secondary" style="flex:1; font-size:13px;" onclick="document.getElementById('importFile').click()">ייבוא מקובץ JSON</button>
+        <input type="file" id="importFile" style="display:none;" onchange="importTasksJSON(event)">
+      </div>
+    </div>
+  </div>
+
+  <!-- 2-Minute Warmup Screen -->
+  <div class="warmup-modal" id="warmupModal">
+    <div class="warmup-header">
+      <div class="warmup-rule">חוזה 120 השניות שלך</div>
+      <div class="warmup-task-name" id="warmupTaskName">בדיקת טרמפולינה לאיתור חור</div>
+    </div>
+
+    <div class="timer-center">
+      <div class="timer-circle" id="timerCircle">
+        <div class="timer-digits" id="timerDigits">02:00</div>
+        <div class="timer-label">עבוד רק 2 דקות בלבד</div>
+      </div>
+
+      <div class="focus-step-instruction">
+        <span>הפוקוס היחיד שלך לעכשיו:</span>
+        <p id="warmupInstructionText">צא לחצר, נפח קלות ובדוק אם יש שריקת אוויר.</p>
+      </div>
+    </div>
+
+    <div class="warmup-actions">
+      <button class="btn btn-complete" onclick="finishWarmup(true)">✅ סיימתי! / אני כבר בשוונג להמשיך</button>
+      <button class="btn btn-stop" onclick="finishWarmup(false)">עשיתי 2 דקות, מספיק לי להיום (נחשב כהצלחה!)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ============================================================
+     REAL DATA SEED (EXACT TASKS FROM NADAV'S GOOGLE TASKS)
+     ============================================================ */
+  const SEED_GOOGLE_TASKS = [
+    {
+      id: "GhIKEHFjN3JqTF9QSUVsV2pIVF8",
+      googleTaskId: "GhIKEHFjN3JqTF9QSUVsV2pIVF8",
+      title: "בניית שידת נעליים בכניסה לבית",
+      energy: "focus",
+      energyLabel: "🧠 פוקוס / תכנון",
+      context: "🏠 בית",
+      time: "שעה+",
+      microStep: "סרטט סקיצה פשוטה על דף של חלוקת המדפים לפי גובה נעליים.",
+      steps: ["שרטוט סקיצה ומדידות", "רכישת פלטות עץ", "חיתוך והרכבה במקום"],
+      completed: false
+    },
+    {
+      id: "GhIKEDhGNzJHM1pwSm5XV3pxN1M",
+      googleTaskId: "GhIKEDhGNzJHM1pwSm5XV3pxN1M",
+      title: "בניית מדפים בנישת כניסה",
+      energy: "focus",
+      energyLabel: "🧠 פוקוס / תכנון",
+      context: "🏠 בית",
+      time: "30 דקות",
+      microStep: "סמן בעיפרון על הקיר את הגובה שבו תרצה את המדף הראשון.",
+      steps: ["סימון גבהים בעיפרון", "קידוח והתקנת תומכים", "הנחת המדפים"],
+      completed: false
+    },
+    {
+      id: "GhIKEHAwMEpIUktuZC1TMDZIdDA",
+      googleTaskId: "GhIKEHAwMEpIUktuZC1TMDZIdDA",
+      title: "לברר על פילטר מים מתחת לכיור (שיחה עם לרנר)",
+      energy: "quick",
+      energyLabel: "⚡ יש לי 5 דק'",
+      context: "📱 טלפון",
+      time: "2 דקות",
+      microStep: "פתח וואטסאפ ושלח ללרנר: 'היי, איזה פילטר מים תת-כיורי מומלץ אצלך?'",
+      steps: ["פתיחת וואטסאפ", "שליחת הודעה ללרנר", "בדיקת המלצות"],
+      completed: false
+    },
+    {
+      id: "GhIKEGFObWFnQlprV2tXSjU5U0w",
+      googleTaskId: "GhIKEGFObWFnQlprV2tXSjU5U0w",
+      title: "לחפש מורה לתופים קרוב ולקבוע שיעור ניסיון",
+      energy: "quick",
+      energyLabel: "⚡ יש לי 5 דק'",
+      context: "📱 טלפון / רכבת",
+      time: "5 דקות",
+      microStep: "פתח גוגל מפות וחפש 'מורה לתופים חיפה' — שמור 2 שמות ראשונים.",
+      steps: ["חיפוש 2 שמות", "שליחת הודעת וואטסאפ", "סגירת שעה לשיעור ניסיון"],
+      completed: false
+    },
+    {
+      id: "GhIKEDBSV2prbDI4bjZ1azV6WG0",
+      googleTaskId: "GhIKEDBSV2prbDI4bjZ1azV6WG0",
+      title: "לתלות את רשת הלולים למטפסים במרפסת",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🌿 מרפסת",
+      time: "15 דקות",
+      microStep: "גש למרפסת ופרוס את רשת הלולים על הרצפה כדי לבדוק את האורך הרצוי.",
+      steps: ["בדיקת אורך", "קיבוע ווים למעקה", "מתיחת הרשת"],
+      completed: false
+    },
+    {
+      id: "GhIKEExteE9aRkZUY3NWZU5Fck4",
+      googleTaskId: "GhIKEExteE9aRkZUY3NWZU5Fck4",
+      title: "לתלות את האדניות הגדולות במרפסת",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🌿 מרפסת",
+      time: "15 דקות",
+      microStep: "הנח את האדניות הגדולות על המעקה כדי לבדוק גובה וחלוקה.",
+      steps: ["הנחה לבדיקת מיקום", "חיבור ווים", "מילוי אדמה"],
+      completed: false
+    },
+    {
+      id: "GhIKEDVHUUNkRkN3TklJdmozT3U",
+      googleTaskId: "GhIKEDVHUUNkRkN3TklJdmozT3U",
+      title: "תיאום שבת עם עדי לפינוי המקלט",
+      energy: "quick",
+      energyLabel: "⚡ יש לי 5 דק'",
+      context: "📱 טלפון",
+      time: "1 דקה",
+      microStep: "שלח לעדי הודעה: 'איזו שבת באוקטובר מתאימה לך שנפנה ביחד את המקלט?'",
+      steps: ["שליחת הודעה", "נעילת תאריך ביומן"],
+      completed: false
+    },
+    {
+      id: "GhIKEG5WcXBJUXRtb24wSXluNkE",
+      googleTaskId: "GhIKEG5WcXBJUXRtb24wSXluNkE",
+      title: "בדיקת ראייה והזמנת משקפיים",
+      energy: "quick",
+      energyLabel: "⚡ יש לי 5 דק'",
+      context: "📱 טלפון",
+      time: "5 דקות",
+      microStep: "חייג לאופטומטריסט הקבוע לקביעת תור לבדיקת ראייה.",
+      steps: ["קביעת תור", "בדיקת ראייה", "מציאת פתרון תלייה"],
+      completed: false
+    },
+    {
+      id: "GhIKEFFCdjdGYk54SEVpdThqUjI",
+      googleTaskId: "GhIKEFFCdjdGYk54SEVpdThqUjI",
+      title: "מיקרו-אימון צהריים (5-10 דק' תנועה/כוח)",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🏠 בית",
+      time: "5 דקות",
+      microStep: "קום מהכיסא, עשה 15 סקוואטים ומתיחת גב ראשונה.",
+      steps: ["15 סקוואטים", "12 שכיבות סמיכה", "מתיחת קוברה"],
+      completed: false
+    },
+    {
+      id: "GhIKEEZVZkc0WGRVMGJfbHFTLUY",
+      googleTaskId: "GhIKEEZVZkc0WGRVMGJfbHFTLUY",
+      title: "גיזום והשרשת הפיקוס + שתילה מחדש של עץ האהבה",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🌿 גינה / מרפסת",
+      time: "10 דקות",
+      microStep: "חתוך ענף יפה של פיקוס ושים אותו בכוס מים על השיש.",
+      steps: ["חיתוך ענף להשרשה", "שתילת עץ האהבה", "השקיה"],
+      completed: false
+    },
+    {
+      id: "GhIKEEhCWEtBdzJaODRwTERTbmk",
+      googleTaskId: "GhIKEEhCWEtBdzJaODRwTERTbmk",
+      title: "בדיקת הטרמפולינה (איתור חור או זריקה)",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🌳 חצר",
+      time: "5 דקות",
+      microStep: "צא לחצר, נפח מעט עם המשאבה ובדוק אם יש שריקת אוויר בולטת.",
+      steps: ["ניפוח לבדיקה", "החלטה: תיקון או זריקה", "קיפול למחסן"],
+      completed: false
+    },
+    {
+      id: "GhIKEHJjNmtPNHlkWFM5bFZJZHM",
+      googleTaskId: "GhIKEHJjNmtPNHlkWFM5bFZJZHM",
+      title: "מדידת כורסת עץ בחוץ ובדיקת כריות באיקאה",
+      energy: "focus",
+      energyLabel: "🧠 פוקוס / תכנון",
+      context: "🌳 חצר / מחשב",
+      time: "10 דקות",
+      microStep: "צא עם מטר לחצר ורשום על דף את הרוחב והעומק של המושב.",
+      steps: ["מדידת רוחב ועומק", "בדיקת דגמי כריות באתר איקאה"],
+      completed: false
+    },
+    {
+      id: "GhIKEGxKejhIb3JBZE0tZ3lIQUo",
+      googleTaskId: "GhIKEGxKejhIb3JBZE0tZ3lIQUo",
+      title: "תיאום עם עדי על מועד פירוק הבריכה",
+      energy: "quick",
+      energyLabel: "⚡ יש לי 5 דק'",
+      context: "📱 טלפון",
+      time: "1 דקה",
+      microStep: "שלח לעדי הודעה: 'מתי נוח לך שנקפל יחד את הבריכה?'",
+      steps: ["שליחת הודעה", "נעילת מועד", "פירוק ותכנון הדק"],
+      completed: false
+    },
+    {
+      id: "GhIKEFNjaVRfQnJURnlMMnZvYU8",
+      googleTaskId: "GhIKEFNjaVRfQnJURnlMMnZvYU8",
+      title: "רשימת קניות לשזר",
+      energy: "focus",
+      energyLabel: "🧠 פוקוס / תכנון",
+      context: "🛒 קניות",
+      time: "5 דקות",
+      microStep: "וודא שהרשימה מוכנה: מלכודת לחות, מאבה למייבש, משחת עץ, שקע טיימר.",
+      steps: ["ריכוז מוצרים", "בדיקת מנגנון השקיה קיים", "קפיצה לשזר"],
+      completed: false
+    },
+    {
+      id: "GhIKEFlfNDA0blZvY1JocU9GbnY",
+      googleTaskId: "GhIKEFlfNDA0blZvY1JocU9GbnY",
+      title: "לבדוק אם מנגנון השקיה קיים עובד (לפני קנייה בשזר)",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🌿 גינה",
+      time: "5 דקות",
+      microStep: "חבר את המנגנון לברז גינה וסובב כדי לראות אם המים נפתחים.",
+      steps: ["חיבור לברז", "בדיקת זרימה וטיימר"],
+      completed: false
+    },
+    // Completed tasks from Google Tasks
+    {
+      id: "GhIKEG1VaEdwblJBZHdwanBFajc",
+      googleTaskId: "GhIKEG1VaEdwblJBZHdwanBFajc",
+      title: "לפרק את בסיס המיטה",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🏠 בית",
+      time: "30 דקות",
+      microStep: "להביא מברגה",
+      steps: [],
+      completed: true
+    },
+    {
+      id: "GhIKEHpLWU9UOFZ6M1NIRnBmWTM",
+      googleTaskId: "GhIKEHpLWU9UOFZ6M1NIRnBmWTM",
+      title: "בדיקת מגלשת קרטון (תיקון או זריקה)",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🏠 בית",
+      time: "5 דקות",
+      microStep: "בדיקה מהירה",
+      steps: [],
+      completed: true
+    },
+    {
+      id: "GhIKEEQxVUxkNFRxWjNyY1kwZGE",
+      googleTaskId: "GhIKEEQxVUxkNFRxWjNyY1kwZGE",
+      title: "לעבור עם מורן על הצעצועים למסירה",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🏠 בית",
+      time: "20 דקות",
+      microStep: "לקחת ארגז",
+      steps: [],
+      completed: true
+    },
+    {
+      id: "GhIKEG90OXUtTkkyNkxnSGZpdGQ",
+      googleTaskId: "GhIKEG90OXUtTkkyNkxnSGZpdGQ",
+      title: "להוריד מהמזגן את המתקן של השמנים האתריים",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🏠 בית",
+      time: "2 דקות",
+      microStep: "הורדה מהמזגן",
+      steps: [],
+      completed: true
+    },
+    {
+      id: "GhIKEEN3a0JtSldzX25PVmRtVnU",
+      googleTaskId: "GhIKEEN3a0JtSldzX25PVmRtVnU",
+      title: "לשמן את הצירים של דלת הכניסה",
+      energy: "low",
+      energyLabel: "🥱 שפל צהריים",
+      context: "🏠 בית",
+      time: "2 דקות",
+      microStep: "ריסוס WD-40",
+      steps: [],
+      completed: true
+    },
+    {
+      id: "GhIKEEJyS1NjUnpUdU5VUThGQXA",
+      googleTaskId: "GhIKEEJyS1NjUnpUdU5VUThGQXA",
+      title: "לקבוע עם לאה פגישה לקפה",
+      energy: "quick",
+      energyLabel: "⚡ יש לי 5 דק'",
+      context: "📱 טלפון",
+      time: "1 דקה",
+      microStep: "הודעה ללאה",
+      steps: [],
+      completed: true
+    },
+    {
+      id: "GhIKEGY2RjdlUTdVZ0JsXzJ0Q2s",
+      googleTaskId: "GhIKEGY2RjdlUTdVZ0JsXzJ0Q2s",
+      title: "לדבר עם צ'יטה לגבי 2 החבילות",
+      energy: "quick",
+      energyLabel: "⚡ יש לי 5 דק'",
+      context: "📱 טלפון",
+      time: "2 דקות",
+      microStep: "שיחה לצ'יטה",
+      steps: [],
+      completed: true
+    }
+  ];
+
+  /* ============================================================
+     LOCAL STORAGE & STATE
+     ============================================================ */
+  const STORAGE_KEY = "single_tasks_data_v3";
+  const CONFIG_KEY = "single_tasks_config_v3";
+  let tasks = [];
+  let googleAccessToken = null;
+  let tokenClient = null;
+
+  function loadTasks() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        tasks = JSON.parse(saved);
+      } else {
+        tasks = [...SEED_GOOGLE_TASKS];
+        saveTasks();
+      }
+    } catch (e) {
+      tasks = [...SEED_GOOGLE_TASKS];
+    }
+  }
+
+  function saveTasks() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    } catch (e) {}
+    updateHeaderCounts();
+  }
+
+  function getStoredClientId() {
+    return localStorage.getItem(CONFIG_KEY + "_client_id") || "";
+  }
+
+  function saveClientId() {
+    const val = document.getElementById('clientIdInput').value.trim();
+    localStorage.setItem(CONFIG_KEY + "_client_id", val);
+    showToast("ה-Client ID נשמר בהצלחה! ✓");
+    initGoogleAuth();
+  }
+
+  /* ============================================================
+     GOOGLE TASKS API SYNC ENGINE (OAUTH2 / REST)
+     ============================================================ */
+  function initGoogleAuth() {
+    const clientId = getStoredClientId();
+    if (!clientId) {
+      document.getElementById('authStatusText').textContent = "פועל על שמירה מקומית (נשמר במכשיר). הזן Client ID לחיבור חי לענן.";
+      document.getElementById('statusDot').style.background = "#f59e0b";
+      return;
+    }
+
+    if (window.google && google.accounts && google.accounts.oauth2) {
+      try {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'https://www.googleapis.com/auth/tasks',
+          callback: (response) => {
+            if (response.error !== undefined) {
+              console.error(response);
+              showToast("שגיאת התחברות ל-Google");
+              return;
+            }
+            googleAccessToken = response.access_token;
+            document.getElementById('btnSync').classList.add('connected');
+            document.getElementById('authStatusText').textContent = "מחובר ומסונכרן ישירות לחשבון Google Tasks! 🟢";
+            document.getElementById('statusDot').style.background = "#10b981";
+            showToast("מחובר ל-Google Tasks! מתחיל סנכרון...");
+            syncWithGoogleTasks();
+          },
+        });
+      } catch (err) {
+        console.warn("Google client init failed", err);
+      }
+    }
+  }
+
+  function requestGoogleAuth() {
+    const clientId = getStoredClientId();
+    if (!clientId) {
+      showToast("אנא הזן קודם Client ID בהגדרות");
+      document.getElementById('clientIdInput').focus();
+      return;
+    }
+    if (!tokenClient) initGoogleAuth();
+    if (tokenClient) {
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    } else {
+      showToast("ספריית Google Identity עדיין נטענת...");
+    }
+  }
+
+  async function triggerSync() {
+    const btnSync = document.getElementById('btnSync');
+    btnSync.classList.add('syncing');
+    document.getElementById('syncText').textContent = "מרענן...";
+
+    if (googleAccessToken) {
+      // Live Google Tasks API Sync
+      await syncWithGoogleTasks();
+    } else {
+      // Local sync & refresh
+      await new Promise(r => setTimeout(r, 600));
+      saveTasks();
+      renderCard();
+      renderModalList();
+      playChime();
+      showToast("הנתונים רועננו ונשמרו מקומית ✓");
+    }
+
+    btnSync.classList.remove('syncing');
+    document.getElementById('syncText').textContent = "מסונכרן";
+    setTimeout(() => {
+      document.getElementById('syncText').textContent = "סנכרון";
+    }, 2000);
+  }
+
+  async function syncWithGoogleTasks() {
+    if (!googleAccessToken) return;
+    try {
+      // Fetch remote Google Tasks
+      const res = await fetch('https://tasks.googleapis.com/tasks/v1/lists/@default/tasks?showCompleted=true&showHidden=true', {
+        headers: { 'Authorization': `Bearer ${googleAccessToken}` }
+      });
+      if (!res.ok) throw new Error("Fetch failed");
+      const data = await res.json();
+      const remoteItems = data.items || [];
+
+      // Merge remote tasks with local tasks
+      remoteItems.forEach(rt => {
+        const existing = tasks.find(t => t.googleTaskId === rt.id || t.id === rt.id);
+        const isDone = (rt.status === 'completed');
+
+        if (existing) {
+          existing.completed = isDone;
+          existing.title = rt.title || existing.title;
+          existing.googleTaskId = rt.id;
+        } else {
+          // New task from Google Tasks -> Auto tag
+          const parsed = parseTextToTask(rt.title);
+          parsed.id = rt.id;
+          parsed.googleTaskId = rt.id;
+          parsed.completed = isDone;
+          tasks.unshift(parsed);
+        }
+      });
+
+      saveTasks();
+      renderCard();
+      renderModalList();
+      playChime();
+      showToast("הסנכרון מול Google Tasks הושלם בהצלחה! 🔄");
+    } catch (err) {
+      console.error("Google sync error:", err);
+      showToast("הסנכרון נכשל, נשמר מקומית");
+    }
+  }
+
+  /* ============================================================
+     EXPORT / IMPORT JSON
+     ============================================================ */
+  function exportTasksJSON() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tasks, null, 2));
+    const dlAnchor = document.createElement('a');
+    dlAnchor.setAttribute("href", dataStr);
+    dlAnchor.setAttribute("download", `single_tasks_backup_${new Date().toISOString().slice(0,10)}.json`);
+    dlAnchor.click();
+    showToast("קובץ הגיבוי הורד בהצלחה 💾");
+  }
+
+  function importTasksJSON(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      try {
+        const imported = JSON.parse(evt.target.result);
+        if (Array.isArray(imported)) {
+          tasks = imported;
+          saveTasks();
+          renderCard();
+          renderModalList();
+          showToast("הנתונים יובאו בהצלחה! ✓");
+        }
+      } catch (err) {
+        showToast("קובץ JSON לא תקין");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  /* ============================================================
+     CARD RENDERING & FILTERING
+     ============================================================ */
+  let currentFilter = 'all';
+  let currentIndex = 0;
+  let timerInterval = null;
+  let timeLeft = 120;
+  let modalActiveTab = 'active';
+
+  function getFilteredActiveTasks() {
+    const active = tasks.filter(t => !t.completed);
+    if (currentFilter === 'all') return active;
+    return active.filter(t => t.energy === currentFilter);
+  }
+
+  function updateHeaderCounts() {
+    const completedCount = tasks.filter(t => t.completed).length;
+    const activeCount = tasks.filter(t => !t.completed).length;
+    document.getElementById('completedCountText').textContent = `${completedCount} בוצעו`;
+    document.getElementById('activeCount').textContent = activeCount;
+    document.getElementById('modalCompletedCount').textContent = completedCount;
+  }
+
+  function renderCard() {
+    const list = getFilteredActiveTasks();
+    const card = document.getElementById('taskCard');
+    const emptyState = document.getElementById('emptyState');
+    const breakdownList = document.getElementById('breakdownList');
+    const btnBreakdown = document.getElementById('btnBreakdown');
+
+    card.style.transform = 'translate(0px, 0px) rotate(0deg)';
+    card.style.transition = 'transform 0.25s ease';
+    document.getElementById('badgePass').style.opacity = '0';
+    document.getElementById('badgeLike').style.opacity = '0';
+
+    breakdownList.style.display = 'none';
+    btnBreakdown.textContent = "🔨 זה גדול עליי, פרק לצעדים";
+
+    if (list.length === 0) {
+      card.style.display = 'none';
+      emptyState.style.display = 'block';
+      return;
+    }
+
+    card.style.display = 'flex';
+    emptyState.style.display = 'none';
+
+    if (currentIndex >= list.length) currentIndex = 0;
+    const task = list[currentIndex];
+
+    document.getElementById('taskTitle').textContent = task.title;
+    document.getElementById('microStepText').textContent = task.microStep || "התחל בצעד של 2 דקות";
+
+    const tagsContainer = document.getElementById('cardTags');
+    tagsContainer.innerHTML = `
+      <span class="tag energy-${task.energy}">${task.energyLabel}</span>
+      <span class="tag">${task.context}</span>
+      <span class="tag">⏱️ ${task.time}</span>
+    `;
+
+    if (task.steps && task.steps.length > 0) {
+      breakdownList.innerHTML = task.steps.map((s, idx) => `
+        <div class="breakdown-item"><span class="breakdown-num">${idx + 1}</span> ${s}</div>
+      `).join('');
+      btnBreakdown.style.display = 'block';
+    } else {
+      btnBreakdown.style.display = 'none';
+    }
+  }
+
+  function setFilter(filter) {
+    currentFilter = filter;
+    currentIndex = 0;
+    document.querySelectorAll('.filter-chip').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('onclick').includes(filter));
+    });
+    renderCard();
+  }
+
+  function nextCard() {
+    const list = getFilteredActiveTasks();
+    if (list.length <= 1) return;
+    currentIndex = (currentIndex + 1) % list.length;
+    renderCard();
+  }
+
+  function toggleBreakdown() {
+    const list = document.getElementById('breakdownList');
+    const btn = document.getElementById('btnBreakdown');
+    if (list.style.display === 'flex') {
+      list.style.display = 'none';
+      btn.textContent = "🔨 זה גדול עליי, פרק לצעדים";
+    } else {
+      list.style.display = 'flex';
+      btn.textContent = "🔼 הסתר שלבים";
+    }
+  }
+
+  /* ============================================================
+     TOUCH & POINTER SWIPE GESTURES (TINDER PHYSICS)
+     ============================================================ */
+  const card = document.getElementById('taskCard');
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let currentX = 0;
+  let currentY = 0;
+  const SWIPE_THRESHOLD = 85;
+
+  function onPointerDown(e) {
+    if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.micro-step-box')) return;
+    isDragging = true;
+    startX = e.clientX || (e.touches && e.touches[0].clientX);
+    startY = e.clientY || (e.touches && e.touches[0].clientY);
+    card.style.transition = 'none';
+  }
+
+  function onPointerMove(e) {
+    if (!isDragging) return;
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    currentX = clientX - startX;
+    currentY = clientY - startY;
+
+    const rotate = currentX * 0.08;
+    card.style.transform = `translate(${currentX}px, ${currentY * 0.35}px) rotate(${rotate}deg)`;
+
+    const badgeLike = document.getElementById('badgeLike');
+    const badgePass = document.getElementById('badgePass');
+
+    if (currentX > 30) {
+      badgeLike.style.opacity = Math.min((currentX - 30) / 60, 1);
+      badgePass.style.opacity = 0;
+    } else if (currentX < -30) {
+      badgePass.style.opacity = Math.min((-currentX - 30) / 60, 1);
+      badgeLike.style.opacity = 0;
+    } else {
+      badgeLike.style.opacity = 0;
+      badgePass.style.opacity = 0;
+    }
+  }
+
+  function onPointerUp() {
+    if (!isDragging) return;
+    isDragging = false;
+
+    if (currentX > SWIPE_THRESHOLD) {
+      // Swiped Right -> "יאללה" (Warmup)
+      card.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+      card.style.transform = `translate(420px, ${currentY}px) rotate(22deg)`;
+      card.style.opacity = '0';
+      setTimeout(() => {
+        card.style.opacity = '1';
+        startWarmup();
+        renderCard();
+      }, 240);
+    } else if (currentX < -SWIPE_THRESHOLD) {
+      // Swiped Left -> "לא עכשיו" (Pass)
+      swipeLeftAnimation();
+    } else {
+      card.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+      card.style.transform = 'translate(0px, 0px) rotate(0deg)';
+      document.getElementById('badgeLike').style.opacity = 0;
+      document.getElementById('badgePass').style.opacity = 0;
+    }
+    currentX = 0;
+    currentY = 0;
+  }
+
+  function swipeLeftAnimation() {
+    card.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
+    card.style.transform = `translate(-420px, 0px) rotate(-22deg)`;
+    card.style.opacity = '0';
+    setTimeout(() => {
+      card.style.opacity = '1';
+      nextCard();
+    }, 220);
+  }
+
+  function swipeLeft() {
+    swipeLeftAnimation();
+  }
+
+  card.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
+
+  /* ============================================================
+     2-MINUTE WARMUP (FOCUS MODE)
+     ============================================================ */
+  function startWarmup() {
+    const list = getFilteredActiveTasks();
+    if (list.length === 0) return;
+    const task = list[currentIndex];
+
+    document.getElementById('warmupTaskName').textContent = task.title;
+    document.getElementById('warmupInstructionText').textContent = task.microStep || task.title;
+
+    const modal = document.getElementById('warmupModal');
+    modal.style.display = 'flex';
+
+    timeLeft = 120;
+    updateTimerDisplay();
+
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      timeLeft--;
+      updateTimerDisplay();
+      if (timeLeft <= 0) {
+        clearInterval(timerInterval);
+        playChime();
+        document.getElementById('timerDigits').textContent = "00:00";
+        showToast("עברו 2 דקות! שברת את הדחיינות 🏆");
+      }
+    }, 1000);
+  }
+
+  function updateTimerDisplay() {
+    const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+    const secs = (timeLeft % 60).toString().padStart(2, '0');
+    document.getElementById('timerDigits').textContent = `${mins}:${secs}`;
+  }
+
+  function finishWarmup(isDone) {
+    clearInterval(timerInterval);
+    document.getElementById('warmupModal').style.display = 'none';
+
+    if (isDone) {
+      playChime();
+      const list = getFilteredActiveTasks();
+      const currentTask = list[currentIndex];
+      currentTask.completed = true;
+      saveTasks();
+      showToast("מעולה! המשימה הושלמה 🎯");
+      renderCard();
+      // Sync update if connected
+      if (googleAccessToken && currentTask.googleTaskId) {
+        patchGoogleTaskStatus(currentTask.googleTaskId, 'completed');
+      }
+    } else {
+      showToast("נרשם כהתחלה מוצלחת! תמשיך כשתרצה 🙌");
+      nextCard();
+    }
+  }
+
+  /* ============================================================
+     FULL LIST MODAL (ALL TASKS & COMPLETED)
+     ============================================================ */
+  function openFullListModal(tab = 'active') {
+    modalActiveTab = tab;
+    switchModalTab(tab);
+    document.getElementById('fullListModal').style.display = 'flex';
+  }
+
+  function closeFullListModal() {
+    document.getElementById('fullListModal').style.display = 'none';
+    renderCard();
+  }
+
+  function switchModalTab(tab) {
+    modalActiveTab = tab;
+    document.getElementById('tabActive').classList.toggle('active', tab === 'active');
+    document.getElementById('tabCompleted').classList.toggle('active', tab === 'completed');
+    renderModalList();
+  }
+
+  function renderModalList() {
+    const container = document.getElementById('modalTaskList');
+    const isCompleted = (modalActiveTab === 'completed');
+    const displayTasks = tasks.filter(t => t.completed === isCompleted);
+
+    if (displayTasks.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center; padding: 40px 10px; color:#64748b;">
+          <p>${isCompleted ? "עדיין אין משימות שבוצעו. קדימה, לוקחים אחת ב-2 דקות!" : "אין משימות פתוחות ברשימה זו."}</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = displayTasks.map(t => `
+      <div class="list-task-item ${t.completed ? 'completed-item' : ''}">
+        <div class="list-task-left">
+          <div class="checkbox-round ${t.completed ? 'checked' : ''}" onclick="toggleTaskStatus('${t.id}')">
+            ${t.completed ? '✓' : ''}
+          </div>
+          <div>
+            <div class="list-task-text">${t.title}</div>
+            <div class="list-task-sub">
+              <span>${t.energyLabel || ''}</span>
+              <span>•</span>
+              <span>${t.time || ''}</span>
+              <span>•</span>
+              <span>${t.context || ''}</span>
+            </div>
+          </div>
+        </div>
+        <div class="list-task-actions">
+          <button class="btn-action-icon" onclick="openEditModal('${t.id}')" title="ערוך">✏️</button>
+          <button class="btn-action-icon btn-delete" onclick="deleteTask('${t.id}')" title="מחק">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function toggleTaskStatus(id) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    task.completed = !task.completed;
+    saveTasks();
+    renderModalList();
+    renderCard();
+    if (task.completed) {
+      playChime();
+      showToast("המשימה סומנה כהושלמה! 👏");
+      if (googleAccessToken && task.googleTaskId) patchGoogleTaskStatus(task.googleTaskId, 'completed');
+    } else {
+      if (googleAccessToken && task.googleTaskId) patchGoogleTaskStatus(task.googleTaskId, 'needsAction');
+    }
+  }
+
+  function deleteTask(id) {
+    const task = tasks.find(t => t.id === id);
+    tasks = tasks.filter(t => t.id !== id);
+    saveTasks();
+    renderModalList();
+    renderCard();
+    showToast("המשימה נמחקה מהמאגר");
+    if (googleAccessToken && task && task.googleTaskId) {
+      deleteGoogleTask(task.googleTaskId);
+    }
+  }
+
+  function handleModalCapture(e) {
+    e.preventDefault();
+    const input = document.getElementById('modalCaptureInput');
+    const text = input.value.trim();
+    if (!text) return;
+    const newTask = createTaskFromText(text);
+    input.value = "";
+    renderModalList();
+    renderCard();
+    showToast("המשימה נוספה למאגר ✨");
+    if (googleAccessToken) postGoogleTask(newTask);
+  }
+
+  /* ============================================================
+     EDIT TASK MODAL (AI CATALOGING CORRECTION)
+     ============================================================ */
+  function openEditModalForCurrent() {
+    const list = getFilteredActiveTasks();
+    if (list.length === 0) return;
+    openEditModal(list[currentIndex].id);
+  }
+
+  function openEditModal(id) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    document.getElementById('editTaskId').value = task.id;
+    document.getElementById('editTitle').value = task.title;
+    document.getElementById('editEnergy').value = task.energy;
+    document.getElementById('editTime').value = task.time || "5 דקות";
+    document.getElementById('editContext').value = task.context || "🏠 בית";
+    document.getElementById('editMicroStep').value = task.microStep || "";
+
+    document.getElementById('editModal').style.display = 'flex';
+  }
+
+  function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+  }
+
+  function saveTaskEdit() {
+    const id = document.getElementById('editTaskId').value;
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    task.title = document.getElementById('editTitle').value.trim() || task.title;
+    task.energy = document.getElementById('editEnergy').value;
+    task.time = document.getElementById('editTime').value;
+    task.context = document.getElementById('editContext').value;
+    task.microStep = document.getElementById('editMicroStep').value.trim();
+
+    if (task.energy === 'low') task.energyLabel = "🥱 שפל צהריים";
+    else if (task.energy === 'quick') task.energyLabel = "⚡ יש לי 5 דק'";
+    else if (task.energy === 'focus') task.energyLabel = "🧠 פוקוס / תכנון";
+
+    saveTasks();
+    closeEditModal();
+    renderCard();
+    renderModalList();
+    showToast("התיקון נשמר בהצלחה! ✓");
+  }
+
+  /* ============================================================
+     SYNC MODAL (SETTINGS)
+     ============================================================ */
+  function openSyncModal() {
+    document.getElementById('clientIdInput').value = getStoredClientId();
+    document.getElementById('syncModal').style.display = 'flex';
+  }
+  function closeSyncModal() {
+    document.getElementById('syncModal').style.display = 'none';
+  }
+
+  /* ============================================================
+     SMART AI PARSER
+     ============================================================ */
+  function parseTextToTask(text) {
+    let energy = "quick";
+    let energyLabel = "⚡ יש לי 5 דק'";
+    let context = "🏠 בית";
+    let time = "5 דקות";
+    let micro = `להתחיל בצעד הראשון של: ${text}`;
+
+    if (text.includes("תכנן") || text.includes("בנה") || text.includes("מדוד") || text.includes("קנה") || text.includes("שידה") || text.includes("מדף")) {
+      energy = "focus";
+      energyLabel = "🧠 פוקוס / תכנון";
+      time = "30 דקות";
+      context = "🏠 בית";
+      micro = "לקחת דף ועט ולרשום סקיצה ראשונית של 2 שורות.";
+    } else if (text.includes("שמן") || text.includes("פיקוס") || text.includes("טרמפולינה") || text.includes("מרפסת") || text.includes("מיטה") || text.includes("בריכה")) {
+      energy = "low";
+      energyLabel = "🥱 שפל צהריים";
+      time = "10 דקות";
+      context = text.includes("מרפסת") ? "🌿 מרפסת" : "🏠 בית";
+      micro = "לגשת למקום ולפנות את השטח שמסביב.";
+    } else if (text.includes("לדבר") || text.includes("לברר") || text.includes("לשאול") || text.includes("להתקשר") || text.includes("תופים")) {
+      energy = "quick";
+      energyLabel = "⚡ יש לי 5 דק'";
+      context = "📱 טלפון";
+      time = "2 דקות";
+      micro = "לפתוח וואטסאפ או חיוג מהיר.";
+    }
+
+    return {
+      id: "t_" + Date.now(),
+      googleTaskId: null,
+      title: text,
+      energy: energy,
+      energyLabel: energyLabel,
+      context: context,
+      time: time,
+      microStep: micro,
+      steps: ["התחלת פעולה", "התקדמות", "סיום"],
+      completed: false
+    };
+  }
+
+  function createTaskFromText(text) {
+    const newTask = parseTextToTask(text);
+    tasks.unshift(newTask);
+    saveTasks();
+    return newTask;
+  }
+
+  function handleCapture(e) {
+    e.preventDefault();
+    const input = document.getElementById('captureInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const newTask = createTaskFromText(text);
+    input.value = "";
+    showToast("המשימה נותחה ונוספה למאגר ✨");
+    currentIndex = 0;
+    renderCard();
+    if (googleAccessToken) postGoogleTask(newTask);
+  }
+
+  async function postGoogleTask(task) {
+    if (!googleAccessToken) return;
+    try {
+      const res = await fetch('https://tasks.googleapis.com/tasks/v1/lists/@default/tasks', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${googleAccessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: task.title,
+          notes: `${task.microStep || ''}
+[אנרגיה: ${task.energyLabel} | זמן: ${task.time} | סביבה: ${task.context}]`
+        })
+      });
+      if (res.ok) {
+        const created = await res.json();
+        task.googleTaskId = created.id;
+        saveTasks();
+      }
+    } catch (e) {
+      console.warn("Could not post task to Google", e);
+    }
+  }
+
+  async function patchGoogleTaskStatus(googleTaskId, status) {
+    if (!googleAccessToken || !googleTaskId) return;
+    try {
+      await fetch(`https://tasks.googleapis.com/tasks/v1/lists/@default/tasks/${googleTaskId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${googleAccessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: status })
+      });
+    } catch (e) {}
+  }
+
+  async function deleteGoogleTask(googleTaskId) {
+    if (!googleAccessToken || !googleTaskId) return;
+    try {
+      await fetch(`https://tasks.googleapis.com/tasks/v1/lists/@default/tasks/${googleTaskId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${googleAccessToken}` }
+      });
+    } catch (e) {}
+  }
+
+  // Audio synthesize chime
+  function playChime() {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.8);
+    } catch (e) {}
+  }
+
+  function showToast(text) {
+    const toast = document.getElementById('toast');
+    toast.textContent = text;
+    toast.classList.add('show');
+    setTimeout(() => {
+      toast.classList.remove('show');
+    }, 2800);
+  }
+
+  // Startup initialization
+  loadTasks();
+  updateHeaderCounts();
+  renderCard();
+  window.addEventListener('load', () => {
+    initGoogleAuth();
+  });
+</script>
+
+</body>
+</html>
